@@ -11,6 +11,7 @@ import uuid
 import logging
 from typing import Optional, Dict
 
+import aiosqlite
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
@@ -29,9 +30,10 @@ class TelegramHandler:
     - Provides /portfolio command and alert messages
     """
 
-    def __init__(self, bot_token: str, chat_id: str):
+    def __init__(self, bot_token: str, chat_id: str, db_path: str = "trading_system.db"):
         self.bot_token = bot_token
         self.chat_id = chat_id
+        self.db_path = db_path
         self.bot = Bot(token=bot_token)
         self._app: Optional[Application] = None
         self._pending_approvals: Dict[str, asyncio.Event] = {}
@@ -76,6 +78,62 @@ class TelegramHandler:
                 event.set()
             logger.info("Telegram bot stopped")
 
+    async def _lookup_market(self, market_id: str) -> Dict:
+        """Look up market title, category, and prices from the database."""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute(
+                    "SELECT title, category, yes_price, no_price, volume FROM markets WHERE market_id = ?",
+                    (market_id,),
+                )
+                row = await cursor.fetchone()
+                if row:
+                    return dict(row)
+        except Exception as e:
+            logger.error(f"Failed to look up market {market_id}: {e}")
+        return {}
+
+    def _format_trade_message(self, position, market_info: Dict, header: str) -> str:
+        """Build a rich Telegram message for a trade."""
+        title = market_info.get("title") or position.market_id
+        category = market_info.get("category", "")
+        volume = market_info.get("volume", 0)
+        yes_price = market_info.get("yes_price", 0)
+        no_price = market_info.get("no_price", 0)
+
+        price_cents = int(position.entry_price * 100)
+        total_cost = position.entry_price * position.quantity
+        confidence_pct = int((position.confidence or 0) * 100)
+        strategy = position.strategy or "directional"
+        rationale = position.rationale or "No analysis provided."
+
+        if len(rationale) > 500:
+            rationale = rationale[:497] + "..."
+
+        # Potential payout if the position resolves at $1
+        max_payout = position.quantity * 1.0
+        potential_profit = max_payout - total_cost
+
+        lines = [
+            f"{header}\n",
+            f"\U0001f4ca {title}",
+        ]
+        if category:
+            lines.append(f"\U0001f3f7 Category: {category}")
+        lines += [
+            f"\n\U0001f4c8 Side: {position.side} | Price: {price_cents}\u00a2 | Qty: {position.quantity}",
+            f"\U0001f4b0 Cost: ${total_cost:.2f} | Payout if right: ${max_payout:.2f} (+${potential_profit:.2f})",
+        ]
+        if yes_price or no_price:
+            lines.append(f"\U0001f4b9 Market prices: YES {yes_price}\u00a2 / NO {no_price}\u00a2 | Vol: {volume:,}")
+        lines += [
+            f"\U0001f3af Confidence: {confidence_pct}%",
+            f"\U0001f4cb Strategy: {strategy}",
+            f"\n\U0001f4a1 Analysis:\n{rationale}",
+        ]
+        return "\n".join(lines)
+
     async def send_trade_approval(self, position) -> bool:
         """
         Send a trade recommendation and wait for Approve/Reject.
@@ -92,24 +150,9 @@ class TelegramHandler:
         self._pending_approvals[approval_id] = event
         self._approval_results[approval_id] = False
 
-        price_cents = int(position.entry_price * 100)
-        total_cost = position.entry_price * position.quantity
-        confidence_pct = int((position.confidence or 0) * 100)
-        strategy = position.strategy or "directional"
-        rationale = position.rationale or "No analysis provided."
-
-        # Truncate rationale if too long for Telegram
-        if len(rationale) > 500:
-            rationale = rationale[:497] + "..."
-
-        message = (
-            f"\U0001f514 TRADE RECOMMENDATION\n\n"
-            f"\U0001f4ca Market: {position.market_id}\n"
-            f"\U0001f4c8 Side: {position.side} | Price: {price_cents}\u00a2 | Qty: {position.quantity}\n"
-            f"\U0001f4b0 Total Cost: ${total_cost:.2f}\n"
-            f"\U0001f3af Confidence: {confidence_pct}%\n"
-            f"\U0001f4cb Strategy: {strategy}\n\n"
-            f"\U0001f4a1 Analysis:\n{rationale}"
+        market_info = await self._lookup_market(position.market_id)
+        message = self._format_trade_message(
+            position, market_info, "\U0001f514 TRADE RECOMMENDATION"
         )
 
         keyboard = InlineKeyboardMarkup([
@@ -153,23 +196,9 @@ class TelegramHandler:
         """
         Send a notification-only message for paper trades (no buttons, no blocking).
         """
-        price_cents = int(position.entry_price * 100)
-        total_cost = position.entry_price * position.quantity
-        confidence_pct = int((position.confidence or 0) * 100)
-        strategy = position.strategy or "directional"
-        rationale = position.rationale or "No analysis provided."
-
-        if len(rationale) > 500:
-            rationale = rationale[:497] + "..."
-
-        message = (
-            f"\U0001f4dd PAPER TRADE EXECUTED\n\n"
-            f"\U0001f4ca Market: {position.market_id}\n"
-            f"\U0001f4c8 Side: {position.side} | Price: {price_cents}\u00a2 | Qty: {position.quantity}\n"
-            f"\U0001f4b0 Total Cost: ${total_cost:.2f}\n"
-            f"\U0001f3af Confidence: {confidence_pct}%\n"
-            f"\U0001f4cb Strategy: {strategy}\n\n"
-            f"\U0001f4a1 Analysis:\n{rationale}"
+        market_info = await self._lookup_market(position.market_id)
+        message = self._format_trade_message(
+            position, market_info, "\U0001f4dd PAPER TRADE EXECUTED"
         )
 
         try:
@@ -185,10 +214,12 @@ class TelegramHandler:
             lines = [f"\U0001f4ca Portfolio Summary\n"]
             total_cost = 0.0
             for p in positions:
+                market_info = await self._lookup_market(p.market_id)
+                title = market_info.get("title") or p.market_id
                 cost = p.entry_price * p.quantity
                 total_cost += cost
                 lines.append(
-                    f"  {p.side} {p.market_id}\n"
+                    f"  {p.side} {title}\n"
                     f"    Qty: {p.quantity} @ {int(p.entry_price * 100)}\u00a2 = ${cost:.2f}"
                 )
             lines.append(f"\nTotal invested: ${total_cost:.2f}")
