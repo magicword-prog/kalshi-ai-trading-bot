@@ -18,6 +18,7 @@ class APIConfig:
     kalshi_api_key: str = field(default_factory=lambda: os.getenv("KALSHI_API_KEY", ""))
     kalshi_base_url: str = "https://api.elections.kalshi.com"  # Updated to new API endpoint
     openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
+    anthropic_api_key: str = field(default_factory=lambda: os.getenv("ANTHROPIC_API_KEY", ""))
     xai_api_key: str = field(default_factory=lambda: os.getenv("XAI_API_KEY", ""))
     openrouter_api_key: str = field(default_factory=lambda: os.getenv("OPENROUTER_API_KEY", ""))
     openai_base_url: str = "https://api.openai.com/v1"
@@ -30,8 +31,8 @@ class EnsembleConfig:
     enabled: bool = True
     # Model roster for ensemble decisions
     models: Dict[str, Dict] = field(default_factory=lambda: {
-        "grok-4-1-fast-reasoning": {"provider": "xai", "role": "forecaster", "weight": 0.30},
-        "anthropic/claude-sonnet-4.5": {"provider": "openrouter", "role": "news_analyst", "weight": 0.20},
+        "claude-sonnet-4-5-20250929": {"provider": "anthropic", "role": "forecaster", "weight": 0.30},
+        "claude-haiku-4-5-20251001": {"provider": "anthropic", "role": "news_analyst", "weight": 0.20},
         "openai/o3": {"provider": "openrouter", "role": "bull_researcher", "weight": 0.20},
         "google/gemini-3-pro-preview": {"provider": "openrouter", "role": "bear_researcher", "weight": 0.15},
         "deepseek/deepseek-v3.2": {"provider": "openrouter", "role": "risk_manager", "weight": 0.15},
@@ -64,34 +65,34 @@ class SentimentConfig:
 @dataclass
 class TradingConfig:
     """Trading strategy configuration."""
-    # Position sizing and risk management - MADE MORE AGGRESSIVE  
-    max_position_size_pct: float = 5.0  # INCREASED: Back to 5% per position (was 3%)
-    max_daily_loss_pct: float = 15.0    # INCREASED: Allow 15% daily loss (was 10%) 
-    max_positions: int = 15              # INCREASED: Allow 15 concurrent positions (was 10)
-    min_balance: float = 50.0           # REDUCED: Lower minimum to trade more (was 100)
+    # Position sizing and risk management - MODERATE RISK
+    max_position_size_pct: float = 3.0  # Max 3% per position
+    max_daily_loss_pct: float = 10.0    # Max 10% daily loss
+    max_positions: int = 10             # Max 10 concurrent positions
+    min_balance: float = 50.0           # Minimum balance to trade
     
     # Market filtering criteria - MUCH MORE PERMISSIVE
     min_volume: float = 200.0            # DECREASED: Much lower volume requirement (was 500, now 200)
     max_time_to_expiry_days: int = 30    # INCREASED: Allow longer timeframes (was 14, now 30)
     
-    # AI decision making - MORE AGGRESSIVE THRESHOLDS
-    min_confidence_to_trade: float = 0.50   # DECREASED: Lower confidence barrier (was 0.65, now 0.50)
-    scan_interval_seconds: int = 30      # DECREASED: Scan more frequently (was 60, now 30)
+    # AI decision making - MODERATE THRESHOLDS
+    min_confidence_to_trade: float = 0.60   # 60% minimum confidence to trade
+    scan_interval_seconds: int = 300        # Scan every 5 minutes
     
     # AI model configuration
-    primary_model: str = "grok-4-1-fast-reasoning"  # Latest xAI frontier reasoning model
-    fallback_model: str = "grok-4-1-fast-non-reasoning"  # Fallback to non-reasoning variant
+    primary_model: str = "claude-sonnet-4-5-20250929"  # Anthropic Claude Sonnet 4.5
+    fallback_model: str = "claude-haiku-4-5-20251001"  # Fallback to faster/cheaper Haiku
     ai_temperature: float = 0  # Lower temperature for more consistent JSON output
-    ai_max_tokens: int = 8000    # Reasonable limit for reasoning models (grok-4 works better with 8000)
+    ai_max_tokens: int = 8000    # Reasonable limit for Claude models
     
     # Position sizing (LEGACY - now using Kelly-primary approach)
     default_position_size: float = 3.0  # REDUCED: Now using Kelly Criterion as primary method (was 5%, now 3%)
     position_size_multiplier: float = 1.0  # Multiplier for AI confidence
     
-    # Kelly Criterion settings (PRIMARY position sizing method) - MORE AGGRESSIVE
+    # Kelly Criterion settings (PRIMARY position sizing method) - MODERATE
     use_kelly_criterion: bool = True        # Use Kelly Criterion for position sizing (PRIMARY METHOD)
-    kelly_fraction: float = 0.75            # INCREASED: More aggressive Kelly multiplier (was 0.5, now 0.75)
-    max_single_position: float = 0.05       # INCREASED: Higher position cap (was 0.03, now 5%)
+    kelly_fraction: float = 0.5             # Moderate Kelly multiplier (half-Kelly)
+    max_single_position: float = 0.03       # Max 3% single position cap
     
     # Trading frequency - MORE FREQUENT
     market_scan_interval: int = 30          # DECREASED: Scan every 30 seconds (was 60)
@@ -101,8 +102,12 @@ class TradingConfig:
     num_processor_workers: int = 5      # Number of concurrent market processor workers
     
     # Market selection preferences
-    preferred_categories: List[str] = field(default_factory=lambda: [])
-    excluded_categories: List[str] = field(default_factory=lambda: [])
+    preferred_categories: List[str] = field(default_factory=lambda: [
+        "economics", "politics", "crypto/finance", "sports"
+    ])
+    excluded_categories: List[str] = field(default_factory=lambda: [
+        "entertainment", "weather"
+    ])
     
     # High-confidence, near-expiry strategy
     enable_high_confidence_strategy: bool = True
@@ -114,8 +119,8 @@ class TradingConfig:
     max_analysis_cost_per_decision: float = 0.15  # INCREASED: Allow higher cost per decision (was 0.10, now 0.15)
     min_confidence_threshold: float = 0.45  # DECREASED: Lower confidence threshold (was 0.55, now 0.45)
 
-    # Cost control and market analysis frequency - MORE PERMISSIVE
-    daily_ai_budget: float = 10.0  # INCREASED: Higher daily budget (was 5.0, now 10.0)
+    # Cost control and market analysis frequency
+    daily_ai_budget: float = 5.0  # Keep API costs low during testing
     max_ai_cost_per_decision: float = 0.08  # INCREASED: Higher per-decision cost (was 0.05, now 0.08)
     analysis_cooldown_hours: int = 3  # DECREASED: Shorter cooldown (was 6, now 3)
     max_analyses_per_market_per_day: int = 4  # INCREASED: More analyses per day (was 2, now 4)
@@ -214,8 +219,8 @@ news_search_volume_threshold: float = 1000.0  # News threshold
 # Overall system behavior settings
 beast_mode_enabled: bool = True         # Enable the unified advanced system
 fallback_to_legacy: bool = True         # Fallback to legacy system if needed
-live_trading_enabled: bool = True       # Set to True for live trading
-paper_trading_mode: bool = False        # Paper trading for testing
+live_trading_enabled: bool = False      # Disabled by default - enable when ready
+paper_trading_mode: bool = True         # Paper trading enabled for testing
 log_level: str = "INFO"                 # Logging level
 performance_monitoring: bool = True     # Enable performance monitoring
 
@@ -243,8 +248,8 @@ class Settings:
         if not self.api.kalshi_api_key:
             raise ValueError("KALSHI_API_KEY environment variable is required")
 
-        if not self.api.xai_api_key:
-            raise ValueError("XAI_API_KEY environment variable is required")
+        if not self.api.anthropic_api_key:
+            raise ValueError("ANTHROPIC_API_KEY environment variable is required")
 
         if self.trading.max_position_size_pct <= 0 or self.trading.max_position_size_pct > 100:
             raise ValueError("max_position_size_pct must be between 0 and 100")
