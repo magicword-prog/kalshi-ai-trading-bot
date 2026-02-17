@@ -94,7 +94,10 @@ class QuickFlipScalpingStrategy:
         4. Sufficient liquidity for entry/exit
         """
         opportunities = []
-        
+
+        # Filter out multi-game parlays
+        markets = [m for m in markets if "MULTIGAME" not in m.market_id]
+
         self.logger.info(f"🔍 Analyzing {len(markets)} markets for quick flip opportunities")
         
         for market in markets:

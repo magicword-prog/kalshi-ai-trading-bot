@@ -416,7 +416,8 @@ class DatabaseManager(TradingLoggerMixin):
                     expiration_ts > ? AND
                     expiration_ts <= ? AND
                     status = 'active' AND
-                    has_position = 0
+                    has_position = 0 AND
+                    market_id NOT LIKE '%MULTIGAME%'
             """, (volume_min, now_ts, max_expiry_ts))
             rows = await cursor.fetchall()
             

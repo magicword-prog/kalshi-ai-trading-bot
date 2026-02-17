@@ -827,6 +827,9 @@ async def create_market_opportunities_from_markets(
     logger = get_trading_logger("portfolio_opportunities")
     opportunities = []
     
+    # Filter out multi-game parlays — these are not suitable for directional AI analysis
+    markets = [m for m in markets if "MULTIGAME" not in m.market_id]
+
     # Limit markets to prevent excessive AI costs and focus on best opportunities
     max_markets_to_analyze = 10  # REDUCED: More selective (was 20, now 10) to focus on highest quality
     if len(markets) > max_markets_to_analyze:
