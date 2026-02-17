@@ -12,6 +12,7 @@ from src.utils.database import DatabaseManager, Position
 from src.config.settings import settings
 from src.utils.logging_setup import get_trading_logger
 from src.clients.kalshi_client import KalshiClient, KalshiAPIError
+from src.telegram_handler import get_telegram_handler
 
 async def execute_position(
     position: Position, 
@@ -35,15 +36,33 @@ async def execute_position(
     logger.info(f"Executing position for market: {position.market_id}")
 
     if live_mode:
+        # Telegram approval gate: block until user approves or timeout
+        telegram = get_telegram_handler()
+        if telegram:
+            approved = await telegram.send_trade_approval(position)
+            if not approved:
+                logger.info(f"Trade REJECTED via Telegram for {position.market_id}")
+                return False
+
         try:
             client_order_id = str(uuid.uuid4())
+            # Kalshi API requires a price param even for market orders.
+            # Use entry_price converted to cents on the appropriate side.
+            price_cents = int(position.entry_price * 100)
+            price_kwargs = {}
+            if position.side.lower() == "yes":
+                price_kwargs["yes_price"] = price_cents
+            else:
+                price_kwargs["no_price"] = price_cents
+
             order_response = await kalshi_client.place_order(
                 ticker=position.market_id,
                 client_order_id=client_order_id,
                 side=position.side.lower(),
                 action="buy",
                 count=position.quantity,
-                type_="market"
+                type_="market",
+                **price_kwargs
             )
             
             # For a market order, the fill price is not guaranteed.
@@ -60,6 +79,11 @@ async def execute_position(
             logger.error(f"Failed to place LIVE order for {position.market_id}: {e}")
             return False
     else:
+        # Send paper trade notification (no blocking)
+        telegram = get_telegram_handler()
+        if telegram:
+            await telegram.send_trade_notification(position)
+
         # Simulate the trade
         await db_manager.update_position_to_live(position.id, position.entry_price)
         logger.info(f"Successfully placed SIMULATED order for {position.market_id}")

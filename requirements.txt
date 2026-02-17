@@ -12,6 +12,8 @@ pycryptodome==3.20.0
 
 # OpenRouter/OpenAI client
 openai==1.51.2
+
+# Anthropic Claude API client (primary AI model)
 anthropic
 
 # Data handling and analysis - updated for Python 3.13 compatibility
@@ -46,11 +48,11 @@ pyyaml==6.0.1
 # Error tracking and monitoring
 sentry-sdk==1.39.2
 
-# xAI Grok API client
-xai_sdk>=1.0.0
-
 # WebSocket streaming
 websockets>=12.0
+
+# Telegram bot for trade approval
+python-telegram-bot>=21.0
 
 # News & sentiment pipeline
 feedparser>=6.0.0

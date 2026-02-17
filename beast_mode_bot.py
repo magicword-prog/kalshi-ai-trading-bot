@@ -34,9 +34,10 @@ from src.jobs.evaluate import run_evaluation
 from src.utils.logging_setup import setup_logging, get_trading_logger
 from src.utils.database import DatabaseManager
 from src.clients.kalshi_client import KalshiClient
-from src.clients.xai_client import XAIClient
+from src.clients.anthropic_client import AnthropicClient
 from src.clients.model_router import ModelRouter
 from src.config.settings import settings
+from src.telegram_handler import init_telegram_handler, shutdown_telegram_handler
 
 # Import Beast Mode components
 from src.strategies.unified_trading_system import run_unified_trading_system, TradingSystemConfig
@@ -101,15 +102,26 @@ class BeastModeBot:
             
             # Initialize other components
             kalshi_client = KalshiClient()
-            xai_client = XAIClient(db_manager=db_manager)  # Pass db_manager for LLM logging
+            anthropic_client = AnthropicClient(db_manager=db_manager)  # Pass db_manager for LLM logging
 
             # Initialize multi-model router (wraps xAI + OpenRouter)
-            self.model_router = ModelRouter(xai_client=xai_client, db_manager=db_manager)
+            self.model_router = ModelRouter(anthropic_client=anthropic_client, db_manager=db_manager)
             self.logger.info(
                 "ModelRouter initialized for multi-model ensemble",
                 ensemble_enabled=settings.ensemble.enabled,
             )
             
+            # Initialize Telegram handler if configured
+            if settings.api.telegram_bot_token and settings.api.telegram_chat_id:
+                self.telegram_handler = await init_telegram_handler(
+                    settings.api.telegram_bot_token,
+                    settings.api.telegram_chat_id,
+                )
+                self.logger.info("Telegram trade approval handler initialized")
+            else:
+                self.telegram_handler = None
+                self.logger.info("Telegram not configured - trades will execute without approval")
+
             # Small delay to ensure everything is ready
             await asyncio.sleep(1)
             
@@ -124,7 +136,7 @@ class BeastModeBot:
             self.logger.info("🚀 Starting trading and monitoring tasks...")
             tasks = [
                 ingestion_task,  # Already started
-                asyncio.create_task(self._run_trading_cycles(db_manager, kalshi_client, xai_client)),
+                asyncio.create_task(self._run_trading_cycles(db_manager, kalshi_client, anthropic_client)),
                 asyncio.create_task(self._run_position_tracking(db_manager, kalshi_client)),
                 asyncio.create_task(self._run_performance_evaluation(db_manager))
             ]
@@ -143,6 +155,7 @@ class BeastModeBot:
             # Wait for shutdown or completion
             await asyncio.gather(*tasks, return_exceptions=True)
             
+            await shutdown_telegram_handler()
             await self.model_router.close()
             await kalshi_client.close()
             
@@ -183,14 +196,14 @@ class BeastModeBot:
                 self.logger.error(f"Error in market ingestion: {e}")
                 await asyncio.sleep(60)
 
-    async def _run_trading_cycles(self, db_manager: DatabaseManager, kalshi_client: KalshiClient, xai_client: XAIClient):
+    async def _run_trading_cycles(self, db_manager: DatabaseManager, kalshi_client: KalshiClient, anthropic_client: AnthropicClient):
         """Main Beast Mode trading cycles."""
         cycle_count = 0
         
         while not self.shutdown_event.is_set():
             try:
                 # Check daily AI cost limits before starting cycle
-                if not await self._check_daily_ai_limits(xai_client):
+                if not await self._check_daily_ai_limits(anthropic_client):
                     # Sleep until next day if limits reached
                     await self._sleep_until_next_day()
                     continue
@@ -218,7 +231,7 @@ class BeastModeBot:
                 self.logger.error(f"Error in trading cycle #{cycle_count}: {e}")
                 await asyncio.sleep(60)
 
-    async def _check_daily_ai_limits(self, xai_client: XAIClient) -> bool:
+    async def _check_daily_ai_limits(self, anthropic_client: AnthropicClient) -> bool:
         """
         Check if we should continue trading based on daily AI cost limits.
         Returns True if we can continue, False if we should pause.
@@ -227,12 +240,12 @@ class BeastModeBot:
             return True
         
         # Check daily tracker in xAI client
-        if hasattr(xai_client, 'daily_tracker') and xai_client.daily_tracker.is_exhausted:
+        if hasattr(anthropic_client, 'daily_tracker') and anthropic_client.daily_tracker.is_exhausted:
             self.logger.warning(
                 "🚫 Daily AI cost limit reached - trading paused",
-                daily_cost=xai_client.daily_tracker.total_cost,
-                daily_limit=xai_client.daily_tracker.daily_limit,
-                requests_today=xai_client.daily_tracker.request_count
+                daily_cost=anthropic_client.daily_tracker.total_cost,
+                daily_limit=anthropic_client.daily_tracker.daily_limit,
+                requests_today=anthropic_client.daily_tracker.request_count
             )
             return False
         
