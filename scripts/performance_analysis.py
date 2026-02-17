@@ -5,7 +5,7 @@ import sys
 sys.path.append('.')
 from src.clients.kalshi_client import KalshiClient
 from src.utils.database import DatabaseManager
-from src.clients.xai_client import XAIClient
+from src.clients.anthropic_client import AnthropicClient
 import aiosqlite
 from datetime import datetime, timedelta
 

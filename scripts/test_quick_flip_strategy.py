@@ -19,7 +19,7 @@ from datetime import datetime
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.clients.kalshi_client import KalshiClient
-from src.clients.xai_client import XAIClient
+from src.clients.anthropic_client import AnthropicClient
 from src.utils.database import DatabaseManager
 from src.utils.logging_setup import setup_logging
 from src.strategies.quick_flip_scalping import (
@@ -41,7 +41,7 @@ async def test_quick_flip_opportunities():
     kalshi_client = KalshiClient()
     db_manager = DatabaseManager()
     await db_manager.initialize()
-    xai_client = XAIClient(db_manager=db_manager)  # Pass db_manager for LLM logging
+    anthropic_client = AnthropicClient(db_manager=db_manager)  # Pass db_manager for LLM logging
     
     try:
         # Create strategy instance
@@ -57,7 +57,7 @@ async def test_quick_flip_opportunities():
         )
         
         strategy = QuickFlipScalpingStrategy(
-            db_manager, kalshi_client, xai_client, config
+            db_manager, kalshi_client, anthropic_client, config
         )
         
         # Get some markets to analyze
@@ -115,7 +115,7 @@ async def test_quick_flip_full_strategy():
     kalshi_client = KalshiClient()
     db_manager = DatabaseManager()
     await db_manager.initialize()
-    xai_client = XAIClient(db_manager=db_manager)  # Pass db_manager for LLM logging
+    anthropic_client = AnthropicClient(db_manager=db_manager)  # Pass db_manager for LLM logging
     
     try:
         # Configure for conservative testing
@@ -141,7 +141,7 @@ async def test_quick_flip_full_strategy():
         results = await run_quick_flip_strategy(
             db_manager=db_manager,
             kalshi_client=kalshi_client,
-            xai_client=xai_client,
+            anthropic_client=anthropic_client,
             available_capital=100.0,  # $100 test capital
             config=config
         )

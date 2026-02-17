@@ -28,7 +28,7 @@ import pandas as pd
 
 from src.utils.database import DatabaseManager
 from src.clients.kalshi_client import KalshiClient
-from src.clients.xai_client import XAIClient
+from src.clients.anthropic_client import AnthropicClient
 from src.config.settings import settings
 
 from src.strategies.unified_trading_system import (
@@ -54,11 +54,11 @@ class BeastModeDashboard:
     def __init__(self):
         self.db_manager = DatabaseManager()
         self.kalshi_client = KalshiClient()
-        self.xai_client = XAIClient()
+        self.anthropic_client = AnthropicClient()
         
         # Initialize unified system for performance tracking
         self.unified_system = UnifiedAdvancedTradingSystem(
-            self.db_manager, self.kalshi_client, self.xai_client
+            self.db_manager, self.kalshi_client, self.anthropic_client
         )
 
     async def show_live_dashboard(self):

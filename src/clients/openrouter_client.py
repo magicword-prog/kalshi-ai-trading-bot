@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from json_repair import repair_json
 from openai import AsyncOpenAI
 
-from src.clients.xai_client import TradingDecision, DailyUsageTracker
+from src.clients.anthropic_client import TradingDecision, DailyUsageTracker
 from src.config.settings import settings
 from src.utils.logging_setup import TradingLoggerMixin, log_error_with_context
 

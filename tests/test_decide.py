@@ -5,7 +5,7 @@ from datetime import datetime
 
 from src.jobs.decide import make_decision_for_market
 from src.utils.database import DatabaseManager
-from src.clients.xai_client import XAIClient
+from src.clients.anthropic_client import AnthropicClient
 from src.clients.kalshi_client import KalshiClient
 from src.config.settings import settings
 from tests.test_database import load_and_prepare_markets, TEST_DB, FIXTURE_PATH
@@ -24,7 +24,7 @@ async def test_make_decision_for_market_creates_position():
     
     # Use real clients - no mocking
     kalshi_client = KalshiClient()
-    xai_client = XAIClient()
+    anthropic_client = AnthropicClient()
     
     try:
         # Get a suitable test market efficiently (only 5 API calls max)
@@ -40,7 +40,7 @@ async def test_make_decision_for_market_creates_position():
         
         # Test the decision making process
         position = await make_decision_for_market(
-            test_market, db_manager, xai_client, kalshi_client
+            test_market, db_manager, anthropic_client, kalshi_client
         )
         
         # The test passes if no exceptions are thrown
@@ -58,7 +58,7 @@ async def test_make_decision_for_market_creates_position():
         
     finally:
         await kalshi_client.close()
-        await xai_client.close()
+        await anthropic_client.close()
         # Clean up test database
         if os.path.exists(TEST_DB):
             os.remove(TEST_DB) 

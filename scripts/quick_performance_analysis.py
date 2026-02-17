@@ -6,7 +6,7 @@ import json
 sys.path.append('.')
 
 from src.clients.kalshi_client import KalshiClient
-from src.clients.xai_client import XAIClient
+from src.clients.anthropic_client import AnthropicClient
 from src.utils.database import DatabaseManager
 import aiosqlite
 from datetime import datetime, timedelta
@@ -19,7 +19,7 @@ async def run_quick_analysis():
     
     # Initialize clients
     kalshi_client = KalshiClient()
-    xai_client = XAIClient()
+    anthropic_client = AnthropicClient()
     db = DatabaseManager()
     await db.initialize()
     
@@ -125,7 +125,7 @@ Focus on actionable insights that can immediately improve the trading system.
         
         # Call Grok4 through XAI client
         try:
-            response = await xai_client.get_completion(
+            response = await anthropic_client.get_completion(
                 prompt=analysis_prompt,
                 max_tokens=3000,
                 temperature=0.3
@@ -180,7 +180,7 @@ Focus on actionable insights that can immediately improve the trading system.
         
     finally:
         await kalshi_client.close()
-        await xai_client.close()
+        await anthropic_client.close()
 
 if __name__ == "__main__":
     asyncio.run(run_quick_analysis()) 

@@ -33,7 +33,7 @@ warnings.filterwarnings('ignore')
 
 from src.utils.database import DatabaseManager, Market, Position
 from src.clients.kalshi_client import KalshiClient
-from src.clients.xai_client import XAIClient
+from src.clients.anthropic_client import AnthropicClient
 from src.config.settings import settings
 from src.utils.logging_setup import get_trading_logger
 
@@ -99,11 +99,11 @@ class AdvancedPortfolioOptimizer:
         self,
         db_manager: DatabaseManager,
         kalshi_client: KalshiClient,
-        xai_client: XAIClient
+        anthropic_client: AnthropicClient
     ):
         self.db_manager = db_manager
         self.kalshi_client = kalshi_client
-        self.xai_client = xai_client
+        self.anthropic_client = anthropic_client
         self.logger = get_trading_logger("portfolio_optimizer")
         
         # Portfolio parameters
@@ -816,7 +816,7 @@ class AdvancedPortfolioOptimizer:
 
 async def create_market_opportunities_from_markets(
     markets: List[Market],
-    xai_client: XAIClient,
+    anthropic_client: AnthropicClient,
     kalshi_client: KalshiClient,
     db_manager: DatabaseManager = None,
     total_capital: float = 10000
@@ -851,7 +851,7 @@ async def create_market_opportunities_from_markets(
             
             # Get REAL AI prediction using fast analysis
             predicted_prob, confidence = await _get_fast_ai_prediction(
-                market, xai_client, market_prob
+                market, anthropic_client, market_prob
             )
             
             # If AI analysis failed, skip this market
@@ -1210,7 +1210,7 @@ def _calculate_simple_kelly(opportunity: MarketOpportunity) -> float:
 
 async def _get_fast_ai_prediction(
     market: Market,
-    xai_client: XAIClient,
+    anthropic_client: AnthropicClient,
     market_price: float
 ) -> Tuple[Optional[float], Optional[float]]:
     """
@@ -1236,9 +1236,9 @@ async def _get_fast_ai_prediction(
         """
         
         # Use AI analysis for portfolio optimization - higher tokens for reasoning models  
-        response_text = await xai_client.get_completion(
+        response_text = await anthropic_client.get_completion(
             prompt,
-            max_tokens=3000,  # Higher for reasoning models like grok-4
+            max_tokens=3000,
             temperature=0.1   # Low temperature for consistency
         )
         
@@ -1284,7 +1284,7 @@ async def _get_fast_ai_prediction(
 async def run_portfolio_optimization(
     db_manager: DatabaseManager,
     kalshi_client: KalshiClient,
-    xai_client: XAIClient
+    anthropic_client: AnthropicClient
 ) -> PortfolioAllocation:
     """
     Main entry point for portfolio optimization.
@@ -1293,7 +1293,7 @@ async def run_portfolio_optimization(
     
     try:
         # Initialize optimizer
-        optimizer = AdvancedPortfolioOptimizer(db_manager, kalshi_client, xai_client)
+        optimizer = AdvancedPortfolioOptimizer(db_manager, kalshi_client, anthropic_client)
         
         # Get markets
         markets = await db_manager.get_eligible_markets(
@@ -1306,7 +1306,7 @@ async def run_portfolio_optimization(
         
         # Convert to opportunities (no immediate trading in batch mode)
         opportunities = await create_market_opportunities_from_markets(
-            markets, xai_client, kalshi_client, None, 0
+            markets, anthropic_client, kalshi_client, None, 0
         )
         
         if not opportunities:
@@ -1328,4 +1328,4 @@ async def run_portfolio_optimization(
         
     except Exception as e:
         logger.error(f"Error in portfolio optimization: {e}")
-        return AdvancedPortfolioOptimizer(db_manager, kalshi_client, xai_client)._empty_allocation() 
+        return AdvancedPortfolioOptimizer(db_manager, kalshi_client, anthropic_client)._empty_allocation() 

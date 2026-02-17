@@ -22,11 +22,10 @@ from enum import Enum
 import aiosqlite
 
 from src.clients.kalshi_client import KalshiClient
-from src.clients.xai_client import XAIClient
+from src.clients.anthropic_client import AnthropicClient
 from src.utils.database import DatabaseManager, Position, TradeLog
 from src.config.settings import settings
 from src.utils.logging_setup import get_trading_logger
-from xai_sdk.chat import user as xai_user
 
 
 class Priority(Enum):
@@ -91,13 +90,13 @@ class AutomatedPerformanceAnalyzer:
     def __init__(self):
         self.logger = get_trading_logger("automated_performance_analyzer")
         self.kalshi_client = None
-        self.xai_client = None
+        self.anthropic_client = None
         self.db = None
         
     async def initialize(self):
         """Initialize clients and database connections."""
         self.kalshi_client = KalshiClient()
-        self.xai_client = XAIClient()
+        self.anthropic_client = AnthropicClient()
         self.db = DatabaseManager()
         await self.db.initialize()
         self.logger.info("Automated Performance Analyzer initialized")
@@ -106,8 +105,8 @@ class AutomatedPerformanceAnalyzer:
         """Clean up connections."""
         if self.kalshi_client:
             await self.kalshi_client.close()
-        if self.xai_client:
-            await self.xai_client.close()
+        if self.anthropic_client:
+            await self.anthropic_client.close()
         self.logger.info("Automated Performance Analyzer closed")
     
     async def run_full_analysis(self) -> Dict[str, Any]:
@@ -422,7 +421,7 @@ Be concise and actionable. Focus on the top 3 priorities.
         try:
             # Use raw completion to get unprocessed text
             messages = [xai_user(analysis_prompt)]
-            response_content, cost = await self.xai_client._make_completion_request(
+            response_content, cost = await self.anthropic_client._make_completion_request(
                 messages, 
                 max_tokens=3000,
                 temperature=0.3
@@ -430,7 +429,7 @@ Be concise and actionable. Focus on the top 3 priorities.
             
             return {
                 'analysis_text': response_content,
-                'model': 'grok-4',
+                'model': 'claude-sonnet-4-5-20250929',
                 'timestamp': datetime.now().isoformat(),
                 'cost': cost,
                 'status': 'success'

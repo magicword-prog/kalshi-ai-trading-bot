@@ -21,7 +21,7 @@ from datetime import datetime
 from typing import Optional
 
 from src.clients.kalshi_client import KalshiClient
-from src.clients.xai_client import XAIClient
+from src.clients.anthropic_client import AnthropicClient
 from src.utils.database import DatabaseManager
 from src.config.settings import settings
 from src.utils.logging_setup import get_trading_logger
@@ -60,7 +60,7 @@ async def run_trading_job() -> Optional[TradingSystemResults]:
         # Initialize clients
         db_manager = DatabaseManager()
         kalshi_client = KalshiClient()
-        xai_client = XAIClient(db_manager=db_manager)  # Pass db_manager for LLM logging
+        anthropic_client = AnthropicClient(db_manager=db_manager)  # Pass db_manager for LLM logging
         
         # Configure the unified system
         # Use default settings unless overridden
@@ -89,7 +89,7 @@ async def run_trading_job() -> Optional[TradingSystemResults]:
         # Execute the unified trading system
         logger.info("🎯 Executing Unified Advanced Trading System")
         results = await run_unified_trading_system(
-            db_manager, kalshi_client, xai_client, config
+            db_manager, kalshi_client, anthropic_client, config
         )
         
         # Log comprehensive results
@@ -136,7 +136,7 @@ async def _fallback_legacy_trading() -> Optional[TradingSystemResults]:
         # Initialize components
         db_manager = DatabaseManager()
         kalshi_client = KalshiClient()
-        xai_client = XAIClient()
+        anthropic_client = AnthropicClient()
         
         # Get eligible markets
         markets = await db_manager.get_eligible_markets(
@@ -155,7 +155,7 @@ async def _fallback_legacy_trading() -> Optional[TradingSystemResults]:
             try:
                 # Make decision
                 position = await make_decision_for_market(
-                    market, db_manager, xai_client, kalshi_client
+                    market, db_manager, anthropic_client, kalshi_client
                 )
                 
                 if position:

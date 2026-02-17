@@ -190,9 +190,9 @@ def cmd_health(args: argparse.Namespace) -> None:
     from dotenv import load_dotenv
     load_dotenv()
 
-    for var in ("KALSHI_API_KEY", "XAI_API_KEY"):
+    for var in ("KALSHI_API_KEY", "ANTHROPIC_API_KEY"):
         val = os.getenv(var, "")
-        if val and val not in ("", "your_kalshi_api_key_here", "your_xai_api_key_here"):
+        if val and val not in ("", "your_kalshi_api_key_here", "your_anthropic_api_key_here"):
             ok(f"{var} is set")
         else:
             fail(f"{var} is missing or placeholder")

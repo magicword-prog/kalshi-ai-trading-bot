@@ -28,7 +28,7 @@ from dataclasses import dataclass, asdict
 import numpy as np
 
 from src.clients.kalshi_client import KalshiClient
-from src.clients.xai_client import XAIClient
+from src.clients.anthropic_client import AnthropicClient
 from src.utils.database import DatabaseManager, Market, Position
 from src.config.settings import settings
 from src.utils.logging_setup import get_trading_logger
@@ -130,12 +130,12 @@ class UnifiedAdvancedTradingSystem:
         self,
         db_manager: DatabaseManager,
         kalshi_client: KalshiClient,
-        xai_client: XAIClient,
+        anthropic_client: AnthropicClient,
         config: Optional[TradingSystemConfig] = None
     ):
         self.db_manager = db_manager
         self.kalshi_client = kalshi_client
-        self.xai_client = xai_client
+        self.anthropic_client = anthropic_client
         self.config = config or TradingSystemConfig()
         self.logger = get_trading_logger("unified_trading_system")
         
@@ -208,8 +208,8 @@ class UnifiedAdvancedTradingSystem:
         self.arbitrage_capital = self.total_capital * self.config.arbitrage_allocation
 
         # Initialize strategy modules with actual capital
-        self.market_maker = AdvancedMarketMaker(self.db_manager, self.kalshi_client, self.xai_client)
-        self.portfolio_optimizer = AdvancedPortfolioOptimizer(self.db_manager, self.kalshi_client, self.xai_client)
+        self.market_maker = AdvancedMarketMaker(self.db_manager, self.kalshi_client, self.anthropic_client)
+        self.portfolio_optimizer = AdvancedPortfolioOptimizer(self.db_manager, self.kalshi_client, self.anthropic_client)
 
         self.logger.info(f"🎯 CAPITAL ALLOCATION: Market Making=${self.market_making_capital:.2f}, Directional=${self.directional_capital:.2f}, Quick Flip=${self.quick_flip_capital:.2f}, Arbitrage=${self.arbitrage_capital:.2f}")
 
@@ -348,7 +348,7 @@ class UnifiedAdvancedTradingSystem:
             
             # Convert markets to opportunities (with immediate trading capability)
             opportunities = await create_market_opportunities_from_markets(
-                markets, self.xai_client, self.kalshi_client, 
+                markets, self.anthropic_client, self.kalshi_client, 
                 self.db_manager, self.directional_capital
             )
             
@@ -413,7 +413,7 @@ class UnifiedAdvancedTradingSystem:
             results = await run_quick_flip_strategy(
                 db_manager=self.db_manager,
                 kalshi_client=self.kalshi_client,
-                xai_client=self.xai_client,
+                anthropic_client=self.anthropic_client,
                 available_capital=self.quick_flip_capital,
                 config=quick_flip_config
             )
@@ -816,7 +816,7 @@ class UnifiedAdvancedTradingSystem:
 async def run_unified_trading_system(
     db_manager: DatabaseManager,
     kalshi_client: KalshiClient,
-    xai_client: XAIClient,
+    anthropic_client: AnthropicClient,
     config: Optional[TradingSystemConfig] = None
 ) -> TradingSystemResults:
     """
@@ -832,7 +832,7 @@ async def run_unified_trading_system(
         
         # Initialize system
         trading_system = UnifiedAdvancedTradingSystem(
-            db_manager, kalshi_client, xai_client, config
+            db_manager, kalshi_client, anthropic_client, config
         )
         
         # 🚨 CRITICAL: Initialize with dynamic balance from Kalshi

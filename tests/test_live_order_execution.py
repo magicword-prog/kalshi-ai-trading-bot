@@ -14,7 +14,7 @@ from datetime import datetime
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.clients.kalshi_client import KalshiClient
-from src.clients.xai_client import XAIClient
+from src.clients.anthropic_client import AnthropicClient
 from src.utils.database import DatabaseManager, Market
 from src.utils.logging_setup import setup_logging
 from src.strategies.portfolio_optimization import create_market_opportunities_from_markets
@@ -29,7 +29,7 @@ async def test_immediate_trading_fix():
     
     # Initialize clients
     kalshi_client = KalshiClient()
-    xai_client = XAIClient()
+    anthropic_client = AnthropicClient()
     db_manager = DatabaseManager()
     
     try:
@@ -108,7 +108,7 @@ async def test_immediate_trading_fix():
         # 4. Test immediate trading by creating opportunities
         logger.info("🚀 Testing immediate trading opportunity creation...")
         opportunities = await create_market_opportunities_from_markets(
-            [market], xai_client, kalshi_client, db_manager, 1000  # $1000 test capital
+            [market], anthropic_client, kalshi_client, db_manager, 1000  # $1000 test capital
         )
         
         logger.info(f"Created {len(opportunities)} opportunities")

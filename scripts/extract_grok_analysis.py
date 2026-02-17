@@ -4,13 +4,12 @@ import asyncio
 import sys
 sys.path.append('.')
 
-from src.clients.xai_client import XAIClient
-from xai_sdk.chat import user as xai_user
+from src.clients.anthropic_client import AnthropicClient
 
 async def extract_analysis():
     """Extract the raw Grok4 analysis without JSON parsing."""
     
-    xai_client = XAIClient()
+    anthropic_client = AnthropicClient()
     
     analysis_prompt = """
 You are an expert quantitative trading analyst. Based on our Kalshi trading system state:
@@ -42,7 +41,7 @@ Be specific and actionable.
     try:
         # Use the raw _make_completion_request method to get unprocessed text
         messages = [xai_user(analysis_prompt)]
-        response_content, cost = await xai_client._make_completion_request(
+        response_content, cost = await anthropic_client._make_completion_request(
             messages, 
             max_tokens=3000,
             temperature=0.3
@@ -66,7 +65,7 @@ Be specific and actionable.
     except Exception as e:
         print(f"❌ Error: {e}")
     finally:
-        await xai_client.close()
+        await anthropic_client.close()
 
 if __name__ == "__main__":
     asyncio.run(extract_analysis()) 

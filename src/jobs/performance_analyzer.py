@@ -12,7 +12,7 @@ from typing import Dict, List, Optional, Any
 import aiosqlite
 
 from src.clients.kalshi_client import KalshiClient
-from src.clients.xai_client import XAIClient
+from src.clients.anthropic_client import AnthropicClient
 from src.utils.database import DatabaseManager, Position, TradeLog
 from src.config.settings import settings
 from src.utils.logging_setup import get_trading_logger
@@ -30,10 +30,10 @@ class TradingPerformanceAnalyzer:
     - Edge detection accuracy
     """
     
-    def __init__(self, db_manager: DatabaseManager, kalshi_client: KalshiClient, xai_client: XAIClient):
+    def __init__(self, db_manager: DatabaseManager, kalshi_client: KalshiClient, anthropic_client: AnthropicClient):
         self.db_manager = db_manager
         self.kalshi_client = kalshi_client
-        self.xai_client = xai_client
+        self.anthropic_client = anthropic_client
         self.logger = get_trading_logger("performance_analyzer")
     
     async def run_comprehensive_analysis(self) -> Dict[str, Any]:
@@ -243,7 +243,7 @@ Focus on actionable insights that can immediately improve performance.
 
         try:
             # Use XAI client's get_completion method - just return the text response
-            response = await self.xai_client.get_completion(
+            response = await self.anthropic_client.get_completion(
                 prompt=analysis_prompt,
                 max_tokens=3000,
                 temperature=0.3
@@ -257,7 +257,7 @@ Focus on actionable insights that can immediately improve performance.
             
             return {
                 'raw_analysis': analysis_text,
-                'model': 'grok-4',
+                'model': 'claude-sonnet-4-5-20250929',
                 'timestamp': datetime.now().isoformat()
             }
             
@@ -354,7 +354,7 @@ Focus on actionable insights that can immediately improve performance.
 async def run_performance_analysis(
     db_manager: Optional[DatabaseManager] = None,
     kalshi_client: Optional[KalshiClient] = None,
-    xai_client: Optional[XAIClient] = None
+    anthropic_client: Optional[AnthropicClient] = None
 ) -> Dict[str, Any]:
     """
     Run automated performance analysis.
@@ -373,11 +373,11 @@ async def run_performance_analysis(
     if kalshi_client is None:
         kalshi_client = KalshiClient()
     
-    if xai_client is None:
-        xai_client = XAIClient()
+    if anthropic_client is None:
+        anthropic_client = AnthropicClient()
     
     try:
-        analyzer = TradingPerformanceAnalyzer(db_manager, kalshi_client, xai_client)
+        analyzer = TradingPerformanceAnalyzer(db_manager, kalshi_client, anthropic_client)
         report = await analyzer.run_comprehensive_analysis()
         
         logger.info("✅ Performance analysis completed successfully")

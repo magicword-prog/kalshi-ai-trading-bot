@@ -22,7 +22,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from src.clients.kalshi_client import KalshiClient
-from src.clients.xai_client import XAIClient
+from src.clients.anthropic_client import AnthropicClient
 from src.utils.database import DatabaseManager, Market, Position
 from src.config.settings import settings
 from src.utils.logging_setup import get_trading_logger
@@ -66,12 +66,12 @@ class QuickFlipScalpingStrategy:
         self,
         db_manager: DatabaseManager,
         kalshi_client: KalshiClient, 
-        xai_client: XAIClient,
+        anthropic_client: AnthropicClient,
         config: Optional[QuickFlipConfig] = None
     ):
         self.db_manager = db_manager
         self.kalshi_client = kalshi_client
-        self.xai_client = xai_client
+        self.anthropic_client = anthropic_client
         self.config = config or QuickFlipConfig()
         self.logger = get_trading_logger("quick_flip_scalping")
         
@@ -230,7 +230,7 @@ CONFIDENCE: [0.0-1.0]
 REASON: [brief explanation]
 """
 
-            response = await self.xai_client.get_completion(
+            response = await self.anthropic_client.get_completion(
                 prompt=prompt,
                 max_tokens=3000,
                 strategy="quick_flip_scalping",
@@ -518,7 +518,7 @@ REASON: [brief explanation]
 async def run_quick_flip_strategy(
     db_manager: DatabaseManager,
     kalshi_client: KalshiClient,
-    xai_client: XAIClient,
+    anthropic_client: AnthropicClient,
     available_capital: float,
     config: Optional[QuickFlipConfig] = None
 ) -> Dict:
@@ -532,7 +532,7 @@ async def run_quick_flip_strategy(
         
         # Initialize strategy
         strategy = QuickFlipScalpingStrategy(
-            db_manager, kalshi_client, xai_client, config
+            db_manager, kalshi_client, anthropic_client, config
         )
         
         # Get available markets

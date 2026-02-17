@@ -46,7 +46,7 @@ async def scan_and_log():
     and log any actionable signals to the paper-trading database.
     """
     from src.clients.kalshi_client import KalshiClient
-    from src.clients.xai_client import XAIClient
+    from src.clients.anthropic_client import AnthropicClient
     from src.utils.database import DatabaseManager
     from src.jobs.ingest import run_ingestion
     from src.jobs.decide import make_decision_for_market
@@ -55,7 +55,7 @@ async def scan_and_log():
 
     kalshi = KalshiClient()
     db = DatabaseManager()
-    xai = XAIClient(db_manager=db)
+    anthropic_ai = AnthropicClient(db_manager=db)
 
     # 1. Ingest fresh market data
     try:
@@ -78,7 +78,7 @@ async def scan_and_log():
             decision = await make_decision_for_market(
                 market_data=market,
                 kalshi_client=kalshi,
-                xai_client=xai,
+                anthropic_client=anthropic_ai,
                 db_manager=db,
             )
 

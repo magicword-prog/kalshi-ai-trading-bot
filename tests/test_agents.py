@@ -76,7 +76,7 @@ class TestAgentProperties:
         agent = ForecasterAgent()
         assert agent.name == "forecaster"
         assert agent.role == "forecaster"
-        assert agent.model_name == "grok-4-1-fast-reasoning"
+        assert agent.model_name == "claude-sonnet-4-5-20250929"
 
     def test_news_analyst_properties(self):
         agent = NewsAnalystAgent()
@@ -106,7 +106,7 @@ class TestAgentProperties:
         agent = TraderAgent()
         assert agent.name == "trader"
         assert agent.role == "trader"
-        assert agent.model_name == "grok-4-1-fast-reasoning"
+        assert agent.model_name == "claude-sonnet-4-5-20250929"
 
 
 class TestAgentAnalyze:

@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
-from src.clients.xai_client import TradingDecision, XAIClient
+from src.clients.anthropic_client import TradingDecision, AnthropicClient
 from src.clients.openrouter_client import OpenRouterClient, MODEL_PRICING
 from src.config.settings import settings
 from src.utils.logging_setup import TradingLoggerMixin
@@ -27,29 +27,27 @@ from src.utils.logging_setup import TradingLoggerMixin
 # The router will try them in order until one succeeds.
 CAPABILITY_MAP: Dict[str, List[Tuple[str, str]]] = {
     "fast": [
+        ("claude-haiku-4-5-20251001", "anthropic"),
         ("google/gemini-3-flash-preview", "openrouter"),
-        ("grok-4-1-fast-reasoning", "xai"),
     ],
     "cheap": [
+        ("claude-haiku-4-5-20251001", "anthropic"),
         ("deepseek/deepseek-v3.2", "openrouter"),
-        ("google/gemini-3-flash-preview", "openrouter"),
     ],
     "reasoning": [
-        ("grok-4-1-fast-reasoning", "xai"),
+        ("claude-sonnet-4-5-20250929", "anthropic"),
         ("openai/o3", "openrouter"),
-        ("anthropic/claude-sonnet-4.5", "openrouter"),
     ],
     "balanced": [
-        ("anthropic/claude-sonnet-4.5", "openrouter"),
+        ("claude-sonnet-4-5-20250929", "anthropic"),
         ("openai/o3", "openrouter"),
-        ("grok-4-1-fast-reasoning", "xai"),
     ],
 }
 
 # Full fleet: used when we need a fallback chain that spans all providers.
 FULL_FLEET: List[Tuple[str, str]] = [
-    ("grok-4-1-fast-reasoning", "xai"),
-    ("anthropic/claude-sonnet-4.5", "openrouter"),
+    ("claude-sonnet-4-5-20250929", "anthropic"),
+    ("claude-haiku-4-5-20251001", "anthropic"),
     ("openai/o3", "openrouter"),
     ("google/gemini-3-pro-preview", "openrouter"),
     ("deepseek/deepseek-v3.2", "openrouter"),
@@ -134,14 +132,17 @@ class ModelRouter(TradingLoggerMixin):
 
     def __init__(
         self,
-        xai_client: Optional[XAIClient] = None,
+        anthropic_client: Optional[AnthropicClient] = None,
         openrouter_client: Optional[OpenRouterClient] = None,
         db_manager: Any = None,
+        # Legacy parameter name for backwards compatibility
+        xai_client: Optional[AnthropicClient] = None,
     ):
         self.db_manager = db_manager
 
         # Lazily initialise provider clients
-        self.xai_client: Optional[XAIClient] = xai_client
+        # Accept xai_client kwarg for backwards compat but store as anthropic_client
+        self.anthropic_client: Optional[AnthropicClient] = anthropic_client or xai_client
         self.openrouter_client: Optional[OpenRouterClient] = openrouter_client
 
         # Build health trackers for the full fleet
@@ -152,7 +153,7 @@ class ModelRouter(TradingLoggerMixin):
 
         self.logger.info(
             "ModelRouter initialized",
-            xai_available=self.xai_client is not None,
+            anthropic_available=self.anthropic_client is not None,
             openrouter_available=self.openrouter_client is not None,
             fleet_size=len(FULL_FLEET),
         )
@@ -165,12 +166,12 @@ class ModelRouter(TradingLoggerMixin):
     def _model_key(model: str, provider: str) -> str:
         return f"{provider}::{model}"
 
-    def _ensure_xai(self) -> XAIClient:
-        """Return the XAI client, creating it on first use if needed."""
-        if self.xai_client is None:
-            self.xai_client = XAIClient(db_manager=self.db_manager)
-            self.logger.info("Lazily initialized XAIClient")
-        return self.xai_client
+    def _ensure_anthropic(self) -> AnthropicClient:
+        """Return the Anthropic client, creating it on first use if needed."""
+        if self.anthropic_client is None:
+            self.anthropic_client = AnthropicClient(db_manager=self.db_manager)
+            self.logger.info("Lazily initialized AnthropicClient")
+        return self.anthropic_client
 
     def _ensure_openrouter(self) -> OpenRouterClient:
         """Return the OpenRouter client, creating it on first use if needed."""
@@ -184,9 +185,9 @@ class ModelRouter(TradingLoggerMixin):
         # OpenRouter models use a slash-delimited namespace
         if "/" in model:
             return "openrouter"
-        # Grok models go through XAI
-        if model.startswith("grok"):
-            return "xai"
+        # Claude models go through Anthropic
+        if model.startswith("claude"):
+            return "anthropic"
         # Default: try openrouter (it can proxy many models)
         return "openrouter"
 
@@ -268,8 +269,8 @@ class ModelRouter(TradingLoggerMixin):
         Send a completion request to the specified (model, provider) pair.
         Returns the response text or raises on failure.
         """
-        if provider == "xai":
-            client = self._ensure_xai()
+        if provider == "anthropic":
+            client = self._ensure_anthropic()
             return await client.get_completion(
                 prompt=prompt,
                 max_tokens=max_tokens,
@@ -302,8 +303,8 @@ class ModelRouter(TradingLoggerMixin):
         """
         Request a trading decision from the specified (model, provider) pair.
         """
-        if provider == "xai":
-            client = self._ensure_xai()
+        if provider == "anthropic":
+            client = self._ensure_anthropic()
             return await client.get_trading_decision(
                 market_data=market_data,
                 portfolio_data=portfolio_data,
@@ -481,8 +482,8 @@ class ModelRouter(TradingLoggerMixin):
     def get_total_cost(self) -> float:
         """Return aggregate cost across all providers."""
         total = 0.0
-        if self.xai_client:
-            total += self.xai_client.total_cost
+        if self.anthropic_client:
+            total += self.anthropic_client.total_cost
         if self.openrouter_client:
             total += self.openrouter_client.total_cost
         return total
@@ -490,8 +491,8 @@ class ModelRouter(TradingLoggerMixin):
     def get_total_requests(self) -> int:
         """Return aggregate request count across all providers."""
         total = 0
-        if self.xai_client:
-            total += self.xai_client.request_count
+        if self.anthropic_client:
+            total += self.anthropic_client.request_count
         if self.openrouter_client:
             total += self.openrouter_client.request_count
         return total
@@ -509,13 +510,13 @@ class ModelRouter(TradingLoggerMixin):
             "model_health": {},
         }
 
-        # XAI provider summary
-        if self.xai_client:
-            summary["providers"]["xai"] = {
-                "total_cost": round(self.xai_client.total_cost, 6),
-                "total_requests": self.xai_client.request_count,
-                "daily_cost": round(self.xai_client.daily_tracker.total_cost, 6),
-                "daily_limit": self.xai_client.daily_tracker.daily_limit,
+        # Anthropic provider summary
+        if self.anthropic_client:
+            summary["providers"]["anthropic"] = {
+                "total_cost": round(self.anthropic_client.total_cost, 6),
+                "total_requests": self.anthropic_client.request_count,
+                "daily_cost": round(self.anthropic_client.daily_tracker.total_cost, 6),
+                "daily_limit": self.anthropic_client.daily_tracker.daily_limit,
             }
 
         # OpenRouter provider summary
@@ -544,8 +545,8 @@ class ModelRouter(TradingLoggerMixin):
     async def close(self) -> None:
         """Shut down all provider clients."""
         tasks = []
-        if self.xai_client:
-            tasks.append(self.xai_client.close())
+        if self.anthropic_client:
+            tasks.append(self.anthropic_client.close())
         if self.openrouter_client:
             tasks.append(self.openrouter_client.close())
 

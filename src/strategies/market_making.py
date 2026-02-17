@@ -22,7 +22,7 @@ from dataclasses import dataclass, asdict
 import numpy as np
 
 from src.clients.kalshi_client import KalshiClient
-from src.clients.xai_client import XAIClient
+from src.clients.anthropic_client import AnthropicClient
 from src.utils.database import DatabaseManager, Market
 from src.config.settings import settings
 from src.utils.logging_setup import get_trading_logger
@@ -87,11 +87,11 @@ class AdvancedMarketMaker:
         self,
         db_manager: DatabaseManager,
         kalshi_client: KalshiClient,
-        xai_client: XAIClient
+        anthropic_client: AnthropicClient
     ):
         self.db_manager = db_manager
         self.kalshi_client = kalshi_client
-        self.xai_client = xai_client
+        self.anthropic_client = anthropic_client
         self.logger = get_trading_logger("market_maker")
         
         # Market making parameters
@@ -477,9 +477,9 @@ class AdvancedMarketMaker:
             """
             
             # Use AI analysis for market making - higher tokens for reasoning models
-            response = await self.xai_client.get_completion(
+            response = await self.anthropic_client.get_completion(
                 prompt, 
-                max_tokens=3000,  # Higher for reasoning models like grok-4
+                max_tokens=3000,
                 temperature=0.1   # Lower for consistency
             )
             
@@ -615,7 +615,7 @@ class AdvancedMarketMaker:
 async def run_market_making_strategy(
     db_manager: DatabaseManager,
     kalshi_client: KalshiClient, 
-    xai_client: XAIClient
+    anthropic_client: AnthropicClient
 ) -> Dict:
     """
     Main entry point for market making strategy.
@@ -624,7 +624,7 @@ async def run_market_making_strategy(
     
     try:
         # Initialize market maker
-        market_maker = AdvancedMarketMaker(db_manager, kalshi_client, xai_client)
+        market_maker = AdvancedMarketMaker(db_manager, kalshi_client, anthropic_client)
         
         # Get eligible markets (remove time restrictions!)
         markets = await db_manager.get_eligible_markets(

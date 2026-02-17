@@ -1,7 +1,7 @@
 """
 Trader Agent -- final decision synthesiser.
 
-Uses Grok-4 (via xAI) by default.  Takes all other agents' outputs and
+Uses Claude Sonnet 4.5 (via Anthropic) by default.  Takes all other agents' outputs and
 makes the final BUY/SKIP decision, producing a TradingDecision-compatible dict.
 """
 
@@ -13,12 +13,12 @@ class TraderAgent(BaseAgent):
     Synthesises all agents' outputs into a final BUY/SELL/SKIP decision.
 
     The output dict is compatible with the TradingDecision dataclass in
-    ``src.clients.xai_client``.
+    ``src.clients.anthropic_client``.
     """
 
     AGENT_NAME = "trader"
     AGENT_ROLE = "trader"
-    DEFAULT_MODEL = "grok-4-1-fast-reasoning"
+    DEFAULT_MODEL = "claude-sonnet-4-5-20250929"
 
     SYSTEM_PROMPT = (
         "You are the head trader at an AI-powered prediction market fund. "

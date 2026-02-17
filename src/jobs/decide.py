@@ -12,7 +12,7 @@ from datetime import datetime
 from src.utils.database import DatabaseManager, Market, Position
 from src.config.settings import settings
 from src.utils.logging_setup import get_trading_logger
-from src.clients.xai_client import XAIClient
+from src.clients.anthropic_client import AnthropicClient
 from src.clients.kalshi_client import KalshiClient
 from src.clients.model_router import ModelRouter
 
@@ -93,9 +93,9 @@ async def _run_ensemble_decision(
         for model_id, cfg in model_map.items():
             role = cfg["role"]
             completions[role] = await _make_completion(model_id)
-        # Trader always uses Grok-4
+        # Trader always uses Claude Sonnet
         if "trader" not in completions:
-            completions["trader"] = await _make_completion("grok-4")
+            completions["trader"] = await _make_completion("claude-sonnet-4-5-20250929")
 
         # Inject news into market_data for agents
         enriched_data = {**market_data, "news_summary": news_summary}
@@ -126,7 +126,7 @@ async def _run_ensemble_decision(
 async def make_decision_for_market(
     market: Market,
     db_manager: DatabaseManager,
-    xai_client: XAIClient,
+    anthropic_client: AnthropicClient,
     kalshi_client: KalshiClient,
     model_router: Optional[ModelRouter] = None,
 ) -> Optional[Position]:
@@ -196,7 +196,7 @@ async def make_decision_for_market(
                 # Skip expensive news search for high-confidence strategy to control costs
                 news_summary = f"Near-expiry high-confidence analysis. Market at {market.yes_price:.2f}"
                 
-                decision = await xai_client.get_trading_decision(
+                decision = await anthropic_client.get_trading_decision(
                     market_data={"title": market.title, "yes_price": market.yes_price},
                     portfolio_data=portfolio_data,
                     news_summary=news_summary
@@ -303,7 +303,7 @@ async def make_decision_for_market(
                 # Fall back to xAI search
                 try:
                     news_summary = await asyncio.wait_for(
-                        xai_client.search(market.title, max_length=200),
+                        anthropic_client.search(market.title, max_length=200),
                         timeout=15.0
                     )
                     estimated_search_cost = 0.02
@@ -336,7 +336,7 @@ async def make_decision_for_market(
                 model_router=model_router,
             )
             if ensemble_result:
-                from src.clients.xai_client import TradingDecision
+                from src.clients.anthropic_client import TradingDecision
                 decision = TradingDecision(
                     action=ensemble_result.get("action", "SKIP"),
                     side=ensemble_result.get("side", "YES"),
@@ -352,7 +352,7 @@ async def make_decision_for_market(
 
         # --- Fallback: Single-model decision ---
         if decision is None:
-            decision = await xai_client.get_trading_decision(
+            decision = await anthropic_client.get_trading_decision(
                 market_data=market_data,
                 portfolio_data=portfolio_data,
                 news_summary=news_summary,
