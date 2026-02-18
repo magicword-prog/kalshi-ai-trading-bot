@@ -400,6 +400,10 @@ def build_win_dataframe(predictions, decompositions, skill_ratings):
             "SG ARG": skill.get("sg_arg", decomp.get("sg_arg")),
             "SG Putt": skill.get("sg_putt", decomp.get("sg_putt")),
             "Course Fit": decomp.get("total_fit_adjustment", decomp.get("total_course_history_adjustment")),
+            "Fit: Accuracy": decomp.get("driving_accuracy_adjustment"),
+            "Fit: Approach": decomp.get("cf_approach_comp"),
+            "Fit: Short Game": decomp.get("cf_short_comp"),
+            "Fit: Distance": decomp.get("driving_distance_adjustment"),
             "Std Dev": decomp.get("std_deviation"),
         })
 
@@ -516,6 +520,61 @@ if page == "Win This Week":
         c3.metric("Top-5 Concentration", f"{top5_concentration:.1%}")
         c4.metric("Last Updated", last_updated or "N/A")
 
+        # Course DNA — which attributes matter most this week
+        st.subheader(f"Course DNA — {course_name}")
+        fit_components = {
+            "Driving Accuracy": "Fit: Accuracy",
+            "Approach": "Fit: Approach",
+            "Short Game": "Fit: Short Game",
+            "Driving Distance": "Fit: Distance",
+        }
+        dna_rows = []
+        for label, col in fit_components.items():
+            if col in win_df.columns:
+                vals = win_df[col].dropna()
+                if not vals.empty:
+                    dna_rows.append({
+                        "Attribute": label,
+                        "Spread (max-min)": vals.max() - vals.min(),
+                        "Std Dev": vals.std(),
+                        "Best Fit": f"{win_df.loc[vals.idxmax(), 'Player']} ({vals.max():+.3f})",
+                        "Worst Fit": f"{win_df.loc[vals.idxmin(), 'Player']} ({vals.min():+.3f})",
+                    })
+        if dna_rows:
+            dna_df = pd.DataFrame(dna_rows).sort_values("Spread (max-min)", ascending=False).reset_index(drop=True)
+            dna_df.index += 1
+            dna_df.index.name = "#"
+
+            # Horizontal bar showing relative importance
+            fig_dna = px.bar(
+                dna_df,
+                y="Attribute",
+                x="Spread (max-min)",
+                orientation="h",
+                height=220,
+                color="Spread (max-min)",
+                color_continuous_scale="Oranges",
+            )
+            fig_dna.update_layout(
+                xaxis_title="Field Spread (strokes)",
+                yaxis_title="",
+                coloraxis_showscale=False,
+                yaxis=dict(categoryorder="total ascending"),
+                margin=dict(t=10),
+            )
+            col_chart, col_table = st.columns([1, 1])
+            with col_chart:
+                st.plotly_chart(fig_dna, use_container_width=True)
+            with col_table:
+                st.dataframe(
+                    dna_df.style.format({"Spread (max-min)": "{:.3f}", "Std Dev": "{:.3f}"}),
+                    use_container_width=True,
+                )
+            st.caption(
+                "Wider spread = this attribute creates more separation between players at this course. "
+                "The top attribute is the biggest differentiator for the week."
+            )
+
         # Main table — full field ranked by Win %
         st.subheader("Full Field Rankings")
 
@@ -528,8 +587,13 @@ if page == "Win This Week":
             return ""
 
         pct_cols = ["Win %", "Top 5", "Top 10", "Top 20", "Make Cut"]
-        signed_cols = ["SG Total", "SG OTT", "SG APP", "SG ARG", "SG Putt", "Course Fit"]
-        color_cols = [c for c in ["Win %", "SG Total", "Course Fit"] if c in win_df.columns]
+        signed_cols = [
+            "SG Total", "SG OTT", "SG APP", "SG ARG", "SG Putt",
+            "Course Fit", "Fit: Accuracy", "Fit: Approach", "Fit: Short Game", "Fit: Distance",
+        ]
+        color_cols = [c for c in ["Win %", "SG Total", "Course Fit",
+                                   "Fit: Accuracy", "Fit: Approach", "Fit: Short Game", "Fit: Distance"]
+                      if c in win_df.columns]
 
         fmt = {}
         for c in pct_cols:
@@ -537,7 +601,7 @@ if page == "Win This Week":
                 fmt[c] = "{:.2%}"
         for c in signed_cols:
             if c in win_df.columns:
-                fmt[c] = "{:+.2f}"
+                fmt[c] = "{:+.3f}"
         if "Std Dev" in win_df.columns:
             fmt["Std Dev"] = "{:.2f}"
 
