@@ -257,8 +257,32 @@ class BaseAgent(ABC):
     def format_market_summary(market_data: dict) -> str:
         """Return a concise human-readable market summary for prompts."""
         title = market_data.get("title", "Unknown Market")
-        yes_price = market_data.get("yes_price", "?")
-        no_price = market_data.get("no_price", "?")
+        # yes_price/no_price are stored in dollars (0-1); convert to cents for display
+        raw_yes = market_data.get("yes_price", "?")
+        raw_no = market_data.get("no_price", "?")
+        if isinstance(raw_yes, (int, float)):
+            yes_cents = raw_yes * 100
+        else:
+            yes_cents = raw_yes
+        if isinstance(raw_no, (int, float)):
+            no_cents = raw_no * 100
+        else:
+            no_cents = raw_no
+
+        # Show bid/ask spread if available (already in cents from API)
+        yes_bid = market_data.get("yes_bid", 0)
+        yes_ask = market_data.get("yes_ask", 0)
+        no_bid = market_data.get("no_bid", 0)
+        no_ask = market_data.get("no_ask", 0)
+
+        if yes_bid or yes_ask:
+            price_line = (
+                f"YES: {yes_cents:.1f}c (bid {yes_bid}c / ask {yes_ask}c) | "
+                f"NO: {no_cents:.1f}c (bid {no_bid}c / ask {no_ask}c)"
+            )
+        else:
+            price_line = f"YES Price: {yes_cents:.1f}c | NO Price: {no_cents:.1f}c"
+
         volume = market_data.get("volume", 0)
         days = market_data.get("days_to_expiry", "?")
         rules = market_data.get("rules", "")
@@ -267,12 +291,35 @@ class BaseAgent(ABC):
         lines = [
             f"Market: {title}",
             f"Rules: {rules}" if rules else "",
-            f"YES Price: {yes_price}c | NO Price: {no_price}c",
+            price_line,
             f"Volume: ${volume:,.0f}" if isinstance(volume, (int, float)) else f"Volume: {volume}",
             f"Days to Expiry: {days}",
         ]
         if news:
-            lines.append(f"Recent News: {news[:500]}")
+            lines.append(f"Recent News: {news[:2000]}")
+
+        golf = market_data.get("golf_context", {})
+        if golf:
+            lines.append(f"\n--- GOLF ANALYTICS ---")
+            preds = golf.get("model_predictions", {})
+            if preds:
+                lines.append(f"DataGolf Model: {preds}")
+            stats = golf.get("player_stats", {})
+            if stats:
+                for player, s in stats.items():
+                    sg = s.get("sg_breakdown", {})
+                    if sg:
+                        lines.append(f"Player SG ({player}): {sg}")
+                    skill = s.get("skill_rating", {})
+                    if skill:
+                        lines.append(f"Skill Rating ({player}): {skill}")
+            odds = golf.get("dg_odds", {})
+            if odds:
+                lines.append(f"DG Odds: {odds}")
+            tourney = golf.get("tournament_info", {})
+            if tourney:
+                lines.append(f"Tournament: {tourney}")
+            lines.append(f"--- END GOLF ANALYTICS ---")
 
         return "\n".join(line for line in lines if line)
 

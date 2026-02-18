@@ -45,6 +45,30 @@ async def execute_position(
                 return False
 
         try:
+            # Fetch live market price to avoid stale entry_price
+            try:
+                live_market_response = await kalshi_client.get_market(position.market_id)
+                live_market = live_market_response.get("market", {})
+                if position.side.lower() == "yes":
+                    current_ask = live_market.get("yes_ask", 0) / 100  # cents to dollars
+                    current_price = live_market.get("yes_price", 0) / 100
+                else:
+                    current_ask = live_market.get("no_ask", 0) / 100
+                    current_price = live_market.get("no_price", 0) / 100
+
+                # Use ask if available, otherwise use last trade price
+                live_price = current_ask if current_ask > 0 else current_price
+
+                if live_price > 0 and abs(position.entry_price - live_price) > 0.05:
+                    logger.info(
+                        f"Price adjustment for {position.market_id}: "
+                        f"entry_price={position.entry_price:.2f} -> live_price={live_price:.2f} "
+                        f"(ask={current_ask:.2f}, last={current_price:.2f})"
+                    )
+                    position.entry_price = live_price
+            except Exception as e:
+                logger.warning(f"Failed to fetch live price for {position.market_id}, using existing entry_price: {e}")
+
             client_order_id = str(uuid.uuid4())
             # Kalshi API requires a price param even for market orders.
             # Use entry_price converted to cents on the appropriate side.

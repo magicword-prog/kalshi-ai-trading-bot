@@ -127,28 +127,62 @@ async def run_ingestion(
             else:
                 logger.warning(f"Could not find market with ticker: {market_ticker}")
         else:
-            logger.info("Fetching all active markets from Kalshi API with pagination.")
-            cursor = None
-            while True:
-                response = await kalshi_client.get_markets(limit=100, cursor=cursor)
-                markets_page = response.get("markets", [])
+            # Filter to PGA golf markets only when golf mode is enabled
+            if settings.golf.enabled:
+                golf_prefixes = await kalshi_client.get_golf_series_tickers()
+                logger.info(f"Golf mode enabled — discovered {len(golf_prefixes)} golf series: {golf_prefixes}")
 
-                active_markets = [m for m in markets_page if m["status"] == "active"]
-                if active_markets:
-                    logger.info(
-                        f"Fetched {len(markets_page)} markets, {len(active_markets)} are active."
-                    )
-                    await process_and_queue_markets(
-                        active_markets,
-                        db_manager,
-                        queue,
-                        existing_position_market_ids,
-                        logger,
-                    )
+                for series_ticker in golf_prefixes:
+                    logger.info(f"Fetching markets for series_ticker={series_ticker}")
+                    cursor = None
+                    while True:
+                        response = await kalshi_client.get_markets(
+                            limit=100, cursor=cursor, series_ticker=series_ticker
+                        )
+                        markets_page = response.get("markets", [])
 
-                cursor = response.get("cursor")
-                if not cursor:
-                    break
+                        active_markets = [m for m in markets_page if m["status"] == "active"]
+                        if active_markets:
+                            logger.info(
+                                f"[{series_ticker}] Fetched {len(markets_page)} markets, "
+                                f"{len(active_markets)} are active."
+                            )
+                            await process_and_queue_markets(
+                                active_markets,
+                                db_manager,
+                                queue,
+                                existing_position_market_ids,
+                                logger,
+                            )
+
+                        cursor = response.get("cursor")
+                        if not cursor:
+                            break
+            else:
+                logger.info("Fetching active markets from Kalshi API with pagination.")
+                cursor = None
+                while True:
+                    response = await kalshi_client.get_markets(
+                        limit=100, cursor=cursor
+                    )
+                    markets_page = response.get("markets", [])
+
+                    active_markets = [m for m in markets_page if m["status"] == "active"]
+                    if active_markets:
+                        logger.info(
+                            f"Fetched {len(markets_page)} markets, {len(active_markets)} are active."
+                        )
+                        await process_and_queue_markets(
+                            active_markets,
+                            db_manager,
+                            queue,
+                            existing_position_market_ids,
+                            logger,
+                        )
+
+                    cursor = response.get("cursor")
+                    if not cursor:
+                        break
 
     except Exception as e:
         logger.error(

@@ -82,14 +82,14 @@ class OpenRouterClient(TradingLoggerMixin):
     """
     Async client that accesses multiple frontier models through OpenRouter.
 
-    Provides the same interface as XAIClient (``get_completion`` and
-    ``get_trading_decision``) so callers can swap providers transparently.
+    Provides ``get_completion`` and ``get_trading_decision`` so callers can
+    swap providers transparently.
 
     Features:
         * Per-model cost tracking with model-specific pricing
         * Automatic fallback across models on failure
         * Exponential-backoff retry logic with rate-limit awareness
-        * Daily cost tracking (mirrors DailyUsageTracker from xai_client)
+        * Daily cost tracking
     """
 
     # Maximum number of retries for a single model before moving to fallback
@@ -131,7 +131,7 @@ class OpenRouterClient(TradingLoggerMixin):
         self.total_cost: float = 0.0
         self.request_count: int = 0
 
-        # Daily usage tracker (same pattern as XAIClient)
+        # Daily usage tracker
         self.usage_file = "logs/daily_openrouter_usage.pkl"
         self.daily_tracker: DailyUsageTracker = self._load_daily_tracker()
 
@@ -145,7 +145,7 @@ class OpenRouterClient(TradingLoggerMixin):
         )
 
     # ------------------------------------------------------------------
-    # Daily usage persistence (mirrors XAIClient)
+    # Daily usage persistence
     # ------------------------------------------------------------------
 
     def _load_daily_tracker(self) -> DailyUsageTracker:
@@ -559,8 +559,18 @@ class OpenRouterClient(TradingLoggerMixin):
     ) -> str:
         """Build a concise trading-decision prompt."""
         title = market_data.get("title", "Unknown Market")
-        yes_price = (market_data.get("yes_bid", 0) + market_data.get("yes_ask", 100)) / 2
-        no_price = (market_data.get("no_bid", 0) + market_data.get("no_ask", 100)) / 2
+        yes_bid = market_data.get("yes_bid", 0)
+        yes_ask = market_data.get("yes_ask", 0)
+        no_bid = market_data.get("no_bid", 0)
+        no_ask = market_data.get("no_ask", 0)
+        if yes_bid or yes_ask:
+            yes_price = (yes_bid + yes_ask) / 2
+        else:
+            yes_price = market_data.get("yes_price", 0) * 100  # dollars to cents
+        if no_bid or no_ask:
+            no_price = (no_bid + no_ask) / 2
+        else:
+            no_price = market_data.get("no_price", 0) * 100  # dollars to cents
         volume = market_data.get("volume", 0)
         days_to_expiry = market_data.get("days_to_expiry", "Unknown")
         rules = market_data.get("rules", "No specific rules provided")

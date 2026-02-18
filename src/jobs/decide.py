@@ -96,9 +96,13 @@ async def _run_ensemble_decision(
         # Trader always uses Claude Sonnet
         if "trader" not in completions:
             completions["trader"] = await _make_completion("claude-sonnet-4-5-20250929")
+        # Golf analyst uses Claude Sonnet when golf mode is enabled
+        if settings.golf.enabled and "golf_analyst" not in completions:
+            completions["golf_analyst"] = await _make_completion("claude-sonnet-4-5-20250929")
 
-        # Inject news into market_data for agents
+        # Inject news and golf context into market_data for agents
         enriched_data = {**market_data, "news_summary": news_summary}
+        # golf_context is already in market_data if golf mode is enabled
 
         debate_result = await runner.run_debate(
             enriched_data, completions, context={}
@@ -270,10 +274,27 @@ async def make_decision_for_market(
         full_market_data = full_market_data_response.get("market", {})
         rules = full_market_data.get("rules", "No rules available.")
         
+        # Fetch golf-specific analytics if golf mode is enabled
+        golf_context = {}
+        if settings.golf.enabled:
+            try:
+                from src.data.golf_data_fetcher import GolfDataFetcher
+                fetcher = GolfDataFetcher()
+                golf_context = await fetcher.get_golf_context(market.title, market.market_id)
+                await fetcher.close()
+                logger.info(f"Golf context fetched for {market.market_id}", players=golf_context.get("market_parsed", {}).get("players", []))
+            except Exception as e:
+                logger.warning(f"Failed to fetch golf context for {market.market_id}: {e}")
+
         market_data = {
             "ticker": market.market_id, "title": market.title, "rules": rules,
             "yes_price": market.yes_price, "no_price": market.no_price,
+            "yes_bid": full_market_data.get("yes_bid", 0),
+            "yes_ask": full_market_data.get("yes_ask", 0),
+            "no_bid": full_market_data.get("no_bid", 0),
+            "no_ask": full_market_data.get("no_ask", 0),
             "volume": market.volume, "expiration_ts": market.expiration_ts,
+            "golf_context": golf_context,
         }
 
         # COST OPTIMIZATION: Skip expensive news search for low-volume markets
@@ -341,7 +362,7 @@ async def make_decision_for_market(
                     action=ensemble_result.get("action", "SKIP"),
                     side=ensemble_result.get("side", "YES"),
                     confidence=float(ensemble_result.get("confidence", 0.0)),
-                    limit_price=int(ensemble_result.get("limit_price", 50)),
+                    limit_price=int(ensemble_result["limit_price"]) if ensemble_result.get("limit_price") is not None else None,
                 )
                 # Attach reasoning for rationale
                 decision.reasoning = ensemble_result.get("reasoning", "Multi-agent ensemble decision")
@@ -381,7 +402,35 @@ async def make_decision_for_market(
         )
 
         if decision.action == "BUY" and decision.confidence >= settings.trading.min_confidence_to_trade:
-            price = market.yes_price if decision.side == "YES" else market.no_price
+            # Use the AI's limit_price (cents) converted to dollars, with sanity check
+            if decision.side == "YES":
+                current_ask = market_data.get("yes_ask", 0) / 100  # cents to dollars
+                fallback_price = market.yes_price
+            else:
+                current_ask = market_data.get("no_ask", 0) / 100
+                fallback_price = market.no_price
+
+            # Use the best available reference price: live ask > ingested midpoint
+            reference_price = current_ask if current_ask > 0 else fallback_price
+
+            if decision.limit_price and decision.limit_price > 0:
+                ai_price = decision.limit_price / 100  # cents to dollars
+                # Clamp if AI price is more than 15 cents from reference
+                if abs(ai_price - reference_price) > 0.15:
+                    logger.warning(
+                        f"AI limit_price {ai_price:.2f} far from reference {reference_price:.2f}, "
+                        f"clamping to reference (ask={current_ask:.2f}, fallback={fallback_price:.2f})"
+                    )
+                    price = reference_price
+                else:
+                    price = ai_price
+            else:
+                price = reference_price
+
+            logger.info(
+                f"Price selection for {market.market_id}: price={price:.4f}, "
+                f"ai_limit={decision.limit_price}, ask={current_ask:.4f}, fallback={fallback_price:.4f}"
+            )
             
             # Apply Grok4 edge filtering - 10% minimum edge requirement
             from src.utils.edge_filter import EdgeFilter
@@ -601,7 +650,7 @@ def estimate_market_volatility(market: Market) -> float:
     """
     try:
         # Get current price to estimate volatility
-        current_price = getattr(market, 'yes_price', 50) / 100  # Convert to 0-1
+        current_price = getattr(market, 'yes_price', 0.5)  # Already in 0-1 range (dollars)
         
         # Binary option volatility formula
         intrinsic_vol = np.sqrt(current_price * (1 - current_price))

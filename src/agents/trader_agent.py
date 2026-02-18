@@ -141,12 +141,16 @@ class TraderAgent(BaseAgent):
 
         confidence = self.clamp(raw_json.get("confidence", 0.5))
 
-        # Limit price: integer cents 1-99
+        # Limit price: integer cents 1-99; default to None so callers detect missing values
+        raw_limit = raw_json.get("limit_price")
         try:
-            limit_price = int(raw_json.get("limit_price", 50))
-            limit_price = max(1, min(99, limit_price))
+            if raw_limit is not None:
+                limit_price = int(raw_limit)
+                limit_price = max(1, min(99, limit_price))
+            else:
+                limit_price = None
         except (TypeError, ValueError):
-            limit_price = 50
+            limit_price = None
 
         position_size_pct = self.clamp(
             raw_json.get("position_size_pct", 1.0), lo=0.0, hi=100.0

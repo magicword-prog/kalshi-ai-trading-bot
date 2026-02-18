@@ -17,11 +17,8 @@ class APIConfig:
     """API configuration settings."""
     kalshi_api_key: str = field(default_factory=lambda: os.getenv("KALSHI_API_KEY", ""))
     kalshi_base_url: str = "https://api.elections.kalshi.com"  # Updated to new API endpoint
-    openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
     anthropic_api_key: str = field(default_factory=lambda: os.getenv("ANTHROPIC_API_KEY", ""))
-    xai_api_key: str = field(default_factory=lambda: os.getenv("XAI_API_KEY", ""))
     openrouter_api_key: str = field(default_factory=lambda: os.getenv("OPENROUTER_API_KEY", ""))
-    openai_base_url: str = "https://api.openai.com/v1"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     telegram_bot_token: str = field(default_factory=lambda: os.getenv("TELEGRAM_BOT_TOKEN", ""))
     telegram_chat_id: str = field(default_factory=lambda: os.getenv("TELEGRAM_CHAT_ID", ""))
@@ -48,6 +45,16 @@ class EnsembleConfig:
 
 
 @dataclass
+class GolfConfig:
+    """PGA golf specialization configuration."""
+    enabled: bool = True
+    datagolf_api_key: str = field(default_factory=lambda: os.getenv("DATAGOLF_API_KEY", ""))
+    tour: str = "pga"
+    # Golf series tickers are discovered dynamically from Kalshi's API
+    # by filtering for series tagged "Golf". No hardcoded list needed.
+
+
+@dataclass
 class SentimentConfig:
     """News and sentiment analysis configuration."""
     enabled: bool = True
@@ -56,6 +63,9 @@ class SentimentConfig:
         "https://feeds.reuters.com/reuters/businessNews",
         "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml",
         "https://feeds.bbci.co.uk/news/business/rss.xml",
+        "https://www.pgatour.com/news/rss",
+        "https://www.espn.com/espn/rss/golf/news",
+        "https://www.golfchannel.com/rss/golf-central",
     ])
     sentiment_model: str = "google/gemini-3-flash-preview"  # Fast/cheap for sentiment
     cache_ttl_minutes: int = 30
@@ -244,6 +254,7 @@ class Settings:
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     ensemble: EnsembleConfig = field(default_factory=EnsembleConfig)
     sentiment: SentimentConfig = field(default_factory=SentimentConfig)
+    golf: GolfConfig = field(default_factory=GolfConfig)
 
     def validate(self) -> bool:
         """Validate configuration settings."""

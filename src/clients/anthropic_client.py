@@ -416,8 +416,19 @@ Provide a brief, factual summary under {max_length // 2} words. If no current in
     ) -> str:
         """Create a simplified, token-efficient prompt for trading decisions."""
         title = market_data.get('title', 'Unknown Market')
-        yes_price = (market_data.get('yes_bid', 0) + market_data.get('yes_ask', 100)) / 2
-        no_price = (market_data.get('no_bid', 0) + market_data.get('no_ask', 100)) / 2
+        # Use bid/ask if available, otherwise fall back to yes_price/no_price
+        yes_bid = market_data.get('yes_bid', 0)
+        yes_ask = market_data.get('yes_ask', 0)
+        no_bid = market_data.get('no_bid', 0)
+        no_ask = market_data.get('no_ask', 0)
+        if yes_bid or yes_ask:
+            yes_price = (yes_bid + yes_ask) / 2
+        else:
+            yes_price = market_data.get('yes_price', 0) * 100  # dollars to cents
+        if no_bid or no_ask:
+            no_price = (no_bid + no_ask) / 2
+        else:
+            no_price = market_data.get('no_price', 0) * 100  # dollars to cents
         volume = market_data.get('volume', 0)
 
         truncated_news = news_summary[:500] + "..." if len(news_summary) > 500 else news_summary
@@ -425,13 +436,14 @@ Provide a brief, factual summary under {max_length // 2} words. If no current in
         prompt = f"""Analyze this prediction market and decide whether to trade.
 
 Market: {title}
-YES: {yes_price}\u00a2 | NO: {no_price}\u00a2 | Volume: ${volume:,.0f}
+YES: {yes_price:.1f}\u00a2 | NO: {no_price:.1f}\u00a2 | Volume: ${volume:,.0f}
 
 News: {truncated_news}
 
 Rules:
 - Only trade if you have >10% edge (your probability - market price)
 - High confidence (>60%) required
+- Set limit_price near the current market price shown above (in cents, 1-99)
 - Return JSON only
 
 Required format:
@@ -448,11 +460,25 @@ Required format:
         """Create the full trading prompt with detailed analysis."""
         from src.utils.prompts import MULTI_AGENT_PROMPT_TPL
 
+        # Compute prices from bid/ask if available, else from yes_price/no_price
+        yes_bid = market_data.get('yes_bid', 0)
+        yes_ask = market_data.get('yes_ask', 0)
+        no_bid = market_data.get('no_bid', 0)
+        no_ask = market_data.get('no_ask', 0)
+        if yes_bid or yes_ask:
+            computed_yes = (yes_bid + yes_ask) / 2
+        else:
+            computed_yes = market_data.get('yes_price', 0) * 100
+        if no_bid or no_ask:
+            computed_no = (no_bid + no_ask) / 2
+        else:
+            computed_no = market_data.get('no_price', 0) * 100
+
         return MULTI_AGENT_PROMPT_TPL.format(
             title=market_data.get('title', 'Unknown Market'),
             rules=market_data.get('rules', 'No specific rules provided'),
-            yes_price=(market_data.get('yes_bid', 0) + market_data.get('yes_ask', 100)) / 2,
-            no_price=(market_data.get('no_bid', 0) + market_data.get('no_ask', 100)) / 2,
+            yes_price=computed_yes,
+            no_price=computed_no,
             volume=market_data.get('volume', 0),
             days_to_expiry=market_data.get('days_to_expiry', 30),
             news_summary=news_summary,
@@ -490,7 +516,9 @@ Required format:
 
             side = decision_data.get('side', 'YES').upper()
             confidence = float(decision_data.get('confidence', 0.5))
-            limit_price = int(decision_data.get('limit_price', 50))
+            # Default limit_price to None so callers can detect missing values
+            raw_limit = decision_data.get('limit_price')
+            limit_price = int(raw_limit) if raw_limit is not None else None
             reasoning = decision_data.get('reasoning', 'No reasoning provided')
 
             return TradingDecision(
@@ -554,8 +582,8 @@ Required format:
         prompt_params = {
             "ticker": market_data.get("ticker", "UNKNOWN"),
             "title": market_data.get("title", "Unknown Market"),
-            "yes_price": market_data.get("yes_bid", 0),
-            "no_price": market_data.get("no_bid", 0),
+            "yes_price": market_data.get("yes_bid", 0) or market_data.get("yes_price", 0) * 100,
+            "no_price": market_data.get("no_bid", 0) or market_data.get("no_price", 0) * 100,
             "volume": market_data.get("volume", 0),
             "close_time": close_time,
             "days_to_expiry": days_to_expiry,

@@ -283,6 +283,22 @@ class KalshiClient(TradingLoggerMixin):
             "GET", "/trade-api/v2/markets", params=params, require_auth=True
         )
     
+    async def get_series(self) -> Dict[str, Any]:
+        """Get all available series from Kalshi."""
+        return await self._make_authenticated_request(
+            "GET", "/trade-api/v2/series", require_auth=False
+        )
+
+    async def get_golf_series_tickers(self) -> List[str]:
+        """Discover all golf-tagged series tickers dynamically."""
+        response = await self.get_series()
+        series_list = response.get("series", [])
+        return [
+            s["ticker"]
+            for s in series_list
+            if s.get("tags") and "Golf" in s["tags"]
+        ]
+
     async def get_market(self, ticker: str) -> Dict[str, Any]:
         """Get specific market data."""
         return await self._make_authenticated_request(

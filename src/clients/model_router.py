@@ -135,14 +135,11 @@ class ModelRouter(TradingLoggerMixin):
         anthropic_client: Optional[AnthropicClient] = None,
         openrouter_client: Optional[OpenRouterClient] = None,
         db_manager: Any = None,
-        # Legacy parameter name for backwards compatibility
-        xai_client: Optional[AnthropicClient] = None,
     ):
         self.db_manager = db_manager
 
         # Lazily initialise provider clients
-        # Accept xai_client kwarg for backwards compat but store as anthropic_client
-        self.anthropic_client: Optional[AnthropicClient] = anthropic_client or xai_client
+        self.anthropic_client: Optional[AnthropicClient] = anthropic_client
         self.openrouter_client: Optional[OpenRouterClient] = openrouter_client
 
         # Build health trackers for the full fleet

@@ -21,7 +21,9 @@ from src.agents.bear_researcher import BearResearcher
 from src.agents.risk_manager_agent import RiskManagerAgent
 from src.agents.trader_agent import TraderAgent
 from src.agents.forecaster_agent import ForecasterAgent
+from src.agents.golf_analyst_agent import GolfAnalystAgent
 from src.agents.news_analyst_agent import NewsAnalystAgent
+from src.config.settings import settings
 from src.utils.logging_setup import get_trading_logger
 
 logger = get_trading_logger("debate")
@@ -123,6 +125,15 @@ class DebateRunner:
                     pre_results["news_result"],
                 )
             )
+        if pre_results.get("golf_result"):
+            context["golf_result"] = pre_results["golf_result"]
+            step_results["golf_analyst"] = pre_results["golf_result"]
+            transcript_parts.append(
+                self._format_step(
+                    "PRE-ANALYSIS: Golf Analyst",
+                    pre_results["golf_result"],
+                )
+            )
 
         # ==================================================================
         # Step 1: Bull researcher presents YES case
@@ -187,7 +198,7 @@ class DebateRunner:
         result = {
             "action": trader_result.get("action", "SKIP"),
             "side": trader_result.get("side", "YES"),
-            "limit_price": trader_result.get("limit_price", 50),
+            "limit_price": trader_result.get("limit_price"),
             "confidence": trader_result.get("confidence", 0.0),
             "position_size_pct": trader_result.get("position_size_pct", 0.0),
             "reasoning": full_reasoning,
@@ -232,6 +243,12 @@ class DebateRunner:
             tasks["news_result"] = asyncio.create_task(
                 self._run_agent_safe(
                     "news_analyst", market_data, context, get_completions["news_analyst"]
+                )
+            )
+        if "golf_analyst" in self.agents and "golf_analyst" in get_completions:
+            tasks["golf_result"] = asyncio.create_task(
+                self._run_agent_safe(
+                    "golf_analyst", market_data, context, get_completions["golf_analyst"]
                 )
             )
 
@@ -344,7 +361,7 @@ class DebateRunner:
         return {
             "action": "SKIP",
             "side": "YES",
-            "limit_price": 50,
+            "limit_price": None,
             "confidence": 0.0,
             "position_size_pct": 0.0,
             "reasoning": reasoning,
@@ -360,7 +377,7 @@ class DebateRunner:
     @staticmethod
     def _default_agents() -> Dict[str, BaseAgent]:
         """Create the default set of agents for the debate."""
-        return {
+        agents = {
             "forecaster": ForecasterAgent(),
             "news_analyst": NewsAnalystAgent(),
             "bull_researcher": BullResearcher(),
@@ -368,3 +385,6 @@ class DebateRunner:
             "risk_manager": RiskManagerAgent(),
             "trader": TraderAgent(),
         }
+        if settings.golf.enabled:
+            agents["golf_analyst"] = GolfAnalystAgent()
+        return agents
